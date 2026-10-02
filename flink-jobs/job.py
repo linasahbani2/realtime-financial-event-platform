@@ -18,8 +18,9 @@ VELOCITY_THRESHOLD = 8       # regle 2 : alerte a la 8e transaction dans la fene
 
 env = StreamExecutionEnvironment.get_execution_environment()
 env.set_runtime_mode(RuntimeExecutionMode.STREAMING)
-env.add_jars("file:///home/lina/rt-fiep/flink-jobs/jars/flink-sql-connector-kafka-3.1.0-1.18.jar")
-
+import os
+JARS_DIR = os.path.dirname(os.path.abspath(__file__))
+env.add_jars(f"file://{JARS_DIR}/jars/flink-sql-connector-kafka-3.1.0-1.18.jar")
 # --- Source : lit les transactions ---
 source = KafkaSource.builder() \
     .set_bootstrap_servers("localhost:9092") \
