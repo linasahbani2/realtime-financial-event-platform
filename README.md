@@ -53,7 +53,9 @@ alerts_consumer.py consumer.py
    docker compose up -d
 ```
 
-2. Creer un fichier `.env` a la racine du projet (voir `.env.example`).
+2. Creer un fichier `.env` a la racine du projet a partir du modele
+   (`cp .env.example .env`, puis choisir un mot de passe), et le relier au
+   dossier docker : `ln -s ../.env docker/.env`.
 
 3. Dans 3 terminaux separes, avec le `venv` de chaque dossier active :
 ```bash

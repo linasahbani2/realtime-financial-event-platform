@@ -35,9 +35,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: rtfiep
-      POSTGRES_PASSWORD: rtfiep_pass
-      POSTGRES_DB: rtfiep_db
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: ${PG_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
