@@ -239,7 +239,7 @@
           }
         }
       ],
-      "title": "Panel TitleDernières alertes",
+      "title": "Dernières alertes",
       "type": "table"
     },
     {
@@ -477,6 +477,6 @@
   "timezone": "browser",
   "title": "RT-FIEP - Alertes",
   "uid": "eg0rem5jk32m8b",
-  "version": 3,
+  "version": 4,
   "weekStart": ""
 }
