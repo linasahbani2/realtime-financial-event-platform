@@ -27,8 +27,9 @@ cursor = pg_conn.cursor()
 INSERT_QUERY = """
     INSERT INTO alerts (
         alert_type, event_id, customer_id, amount,
-        recent_average, tx_count, event_timestamp
-    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+        recent_average, tx_count, from_country, to_country, gap_seconds,
+        event_timestamp
+    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     ON CONFLICT (event_id, alert_type) DO NOTHING;
 """
 
@@ -49,6 +50,9 @@ if __name__ == "__main__":
                 alert["amount"],
                 alert.get("recent_average"),
                 alert.get("tx_count"),
+                alert.get("from_country"),
+                alert.get("to_country"),
+                alert.get("gap_seconds"),
                 alert["event_timestamp"]
             ))
             print(f"Alerte stockee : {alert['alert_type']} - client {alert['customer_id']}")

@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 from pyflink.common import SimpleStringSchema, WatermarkStrategy, Types
 from pyflink.datastream import StreamExecutionEnvironment, RuntimeExecutionMode
@@ -15,12 +16,14 @@ HISTORY_SIZE = 5             # regle 1 : on garde les 5 derniers montants
 MIN_HISTORY = 3              # regle 1 : il faut au moins 3 montants en memoire
 VELOCITY_WINDOW_MS = 10_000  # regle 2 : fenetre de 10 secondes
 VELOCITY_THRESHOLD = 8       # regle 2 : alerte a la 8e transaction dans la fenetre
+GEO_WINDOW_MS = 60_000       # regle 3 : fenetre de 60 secondes
+
+JARS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 env = StreamExecutionEnvironment.get_execution_environment()
 env.set_runtime_mode(RuntimeExecutionMode.STREAMING)
-import os
-JARS_DIR = os.path.dirname(os.path.abspath(__file__))
 env.add_jars(f"file://{JARS_DIR}/jars/flink-sql-connector-kafka-3.1.0-1.18.jar")
+
 # --- Source : lit les transactions ---
 source = KafkaSource.builder() \
     .set_bootstrap_servers("localhost:9092") \
@@ -35,12 +38,15 @@ stream = env.from_source(source, WatermarkStrategy.no_watermarks(), "kafka-sourc
 
 class AnomalyDetector(KeyedProcessFunction):
     def open(self, runtime_context):
-        # Deux memoires PAR CLIENT
+        # Trois memoires PAR CLIENT
         self.amounts = runtime_context.get_list_state(
             ListStateDescriptor("amounts", Types.DOUBLE())
         )
         self.timestamps = runtime_context.get_list_state(
             ListStateDescriptor("timestamps", Types.LONG())
+        )
+        self.last_location = runtime_context.get_list_state(
+            ListStateDescriptor("last_location", Types.STRING())
         )
 
     def process_element(self, value, ctx):
@@ -65,7 +71,6 @@ class AnomalyDetector(KeyedProcessFunction):
                     "event_timestamp": event["timestamp"],
                 })
 
-        # Un montant anormal n'entre pas dans l'historique (sinon il fausse la moyenne)
         if not is_amount_anomaly:
             past_amounts.append(amount)
             self.amounts.update(past_amounts[-HISTORY_SIZE:])
@@ -84,6 +89,27 @@ class AnomalyDetector(KeyedProcessFunction):
                 "tx_count": len(recent),
                 "event_timestamp": event["timestamp"],
             })
+
+        # ---------- Regle 3 : pays different trop rapidement ----------
+        country = event["country"]
+        stored = list(self.last_location.get())
+
+        if stored:
+            prev_country, prev_ts_str = stored[0].split("|")
+            prev_ts = int(prev_ts_str)
+            if country != prev_country and (ts_ms - prev_ts) < GEO_WINDOW_MS:
+                yield json.dumps({
+                    "alert_type": "GEOGRAPHIC_ANOMALY",
+                    "event_id": event["event_id"],
+                    "customer_id": event["customer_id"],
+                    "amount": amount,
+                    "from_country": prev_country,
+                    "to_country": country,
+                    "gap_seconds": (ts_ms - prev_ts) // 1000,
+                    "event_timestamp": event["timestamp"],
+                })
+
+        self.last_location.update([f"{country}|{ts_ms}"])
 
 
 alerts = stream \

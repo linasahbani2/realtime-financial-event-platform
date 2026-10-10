@@ -13,6 +13,7 @@ producer = Producer({'bootstrap.servers': os.environ["KAFKA_BOOTSTRAP"]})
 
 # Chaque client a un montant "habituel" (entre 20 et 150 EUR)
 CUSTOMERS = {f"C{10000 + i}": random.uniform(20, 150) for i in range(10)}
+OTHER_COUNTRIES = ["FR", "DE", "ES", "US"]
 
 
 def delivery_report(err, msg):
@@ -70,6 +71,17 @@ if __name__ == "__main__":
                 for _ in range(15):
                     send(make_event(customer_id, normal_amount(customer_id)))
                     time.sleep(0.2)
+
+            elif r < 0.04:
+                # Scenario C : meme client, deux pays differents, trop vite
+                send(make_event(customer_id, normal_amount(customer_id)))
+                gap = random.uniform(10, 25)
+                to_country = random.choice(OTHER_COUNTRIES)
+                print(f"[ANOMALIE INJECTEE - geo] {customer_id} : TN -> {to_country} dans {gap:.0f}s")
+                time.sleep(gap)
+                event2 = make_event(customer_id, normal_amount(customer_id))
+                event2["country"] = to_country
+                send(event2)
 
             else:
                 # Transaction normale
