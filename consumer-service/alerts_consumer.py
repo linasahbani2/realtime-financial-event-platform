@@ -26,10 +26,10 @@ cursor = pg_conn.cursor()
 
 INSERT_QUERY = """
     INSERT INTO alerts (
-        alert_type, event_id, customer_id, amount,
+        alert_type, risk_level, event_id, customer_id, amount,
         recent_average, tx_count, from_country, to_country, gap_seconds,
         event_timestamp
-    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     ON CONFLICT (event_id, alert_type) DO NOTHING;
 """
 
@@ -46,7 +46,9 @@ if __name__ == "__main__":
 
             alert = json.loads(msg.value())
             cursor.execute(INSERT_QUERY, (
-                alert["alert_type"], alert["event_id"], alert["customer_id"],
+                alert["alert_type"],
+                alert.get("risk_level"),
+                alert["event_id"], alert["customer_id"],
                 alert["amount"],
                 alert.get("recent_average"),
                 alert.get("tx_count"),
@@ -55,7 +57,7 @@ if __name__ == "__main__":
                 alert.get("gap_seconds"),
                 alert["event_timestamp"]
             ))
-            print(f"Alerte stockee : {alert['alert_type']} - client {alert['customer_id']}")
+            print(f"Alerte stockee : {alert['alert_type']} [{alert.get('risk_level')}] - client {alert['customer_id']}")
 
     except KeyboardInterrupt:
         print("\nArret demande.")

@@ -20,6 +20,22 @@ GEO_WINDOW_MS = 60_000       # regle 3 : fenetre de 60 secondes
 
 JARS_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
+# --- Niveaux de risque ---
+def amount_risk(ratio):
+    """ratio = montant / moyenne recente du client."""
+    if ratio >= 30:
+        return "CRITICAL"
+    if ratio >= 10:
+        return "HIGH"
+    return "MEDIUM"
+
+
+def geo_risk(gap_seconds):
+    """Plus l'ecart entre les deux pays est court, plus c'est suspect."""
+    return "CRITICAL" if gap_seconds < 15 else "HIGH"
+
+
 env = StreamExecutionEnvironment.get_execution_environment()
 env.set_runtime_mode(RuntimeExecutionMode.STREAMING)
 env.add_jars(f"file://{JARS_DIR}/jars/flink-sql-connector-kafka-3.1.0-1.18.jar")
@@ -64,6 +80,7 @@ class AnomalyDetector(KeyedProcessFunction):
                 is_amount_anomaly = True
                 yield json.dumps({
                     "alert_type": "AMOUNT_ANOMALY",
+                    "risk_level": amount_risk(amount / average),
                     "event_id": event["event_id"],
                     "customer_id": event["customer_id"],
                     "amount": amount,
@@ -83,6 +100,7 @@ class AnomalyDetector(KeyedProcessFunction):
         if len(recent) == VELOCITY_THRESHOLD:
             yield json.dumps({
                 "alert_type": "VELOCITY_ANOMALY",
+                "risk_level": "HIGH",
                 "event_id": event["event_id"],
                 "customer_id": event["customer_id"],
                 "amount": amount,
@@ -98,14 +116,16 @@ class AnomalyDetector(KeyedProcessFunction):
             prev_country, prev_ts_str = stored[0].split("|")
             prev_ts = int(prev_ts_str)
             if country != prev_country and (ts_ms - prev_ts) < GEO_WINDOW_MS:
+                gap_seconds = (ts_ms - prev_ts) // 1000
                 yield json.dumps({
                     "alert_type": "GEOGRAPHIC_ANOMALY",
+                    "risk_level": geo_risk(gap_seconds),
                     "event_id": event["event_id"],
                     "customer_id": event["customer_id"],
                     "amount": amount,
                     "from_country": prev_country,
                     "to_country": country,
-                    "gap_seconds": (ts_ms - prev_ts) // 1000,
+                    "gap_seconds": gap_seconds,
                     "event_timestamp": event["timestamp"],
                 })
 
