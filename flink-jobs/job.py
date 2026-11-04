@@ -17,6 +17,10 @@ MIN_HISTORY = 3              # regle 1 : il faut au moins 3 montants en memoire
 VELOCITY_WINDOW_MS = 10_000  # regle 2 : fenetre de 10 secondes
 VELOCITY_THRESHOLD = 8       # regle 2 : alerte a la 8e transaction dans la fenetre
 GEO_WINDOW_MS = 60_000       # regle 3 : fenetre de 60 secondes
+STRUCT_THRESHOLD = 10_000                # regle 4 : seuil de declaration (EUR)
+STRUCT_LOWER = 0.9 * STRUCT_THRESHOLD    # regle 4 : "juste en dessous" = entre 9 000 et 10 000
+STRUCT_WINDOW_MS = 600_000               # regle 4 : fenetre de 10 minutes
+STRUCT_MIN_COUNT = 3                     # regle 4 : alerte a la 3e transaction suspecte
 
 JARS_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -54,7 +58,7 @@ stream = env.from_source(source, WatermarkStrategy.no_watermarks(), "kafka-sourc
 
 class AnomalyDetector(KeyedProcessFunction):
     def open(self, runtime_context):
-        # Trois memoires PAR CLIENT
+        # Quatre memoires PAR CLIENT
         self.amounts = runtime_context.get_list_state(
             ListStateDescriptor("amounts", Types.DOUBLE())
         )
@@ -63,6 +67,9 @@ class AnomalyDetector(KeyedProcessFunction):
         )
         self.last_location = runtime_context.get_list_state(
             ListStateDescriptor("last_location", Types.STRING())
+        )
+        self.near_threshold = runtime_context.get_list_state(
+            ListStateDescriptor("near_threshold", Types.LONG())
         )
 
     def process_element(self, value, ctx):
@@ -130,6 +137,25 @@ class AnomalyDetector(KeyedProcessFunction):
                 })
 
         self.last_location.update([f"{country}|{ts_ms}"])
+
+        # ---------- Regle 4 : structuring (montants juste sous le seuil) ----------
+        if STRUCT_LOWER <= amount < STRUCT_THRESHOLD:
+            near = [t for t in self.near_threshold.get() if ts_ms - t <= STRUCT_WINDOW_MS]
+            near.append(ts_ms)
+            self.near_threshold.update(near)
+
+            if len(near) == STRUCT_MIN_COUNT:
+                yield json.dumps({
+                    "alert_type": "STRUCTURING",
+                    "risk_level": "HIGH",
+                    "event_id": event["event_id"],
+                    "customer_id": event["customer_id"],
+                    "amount": amount,
+                    "tx_count": len(near),
+                    "event_timestamp": event["timestamp"],
+                })
+                # On repart de zero : un nouvel episode demandera 3 nouvelles transactions
+                self.near_threshold.clear()
 
 
 alerts = stream \

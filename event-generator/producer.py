@@ -83,6 +83,13 @@ if __name__ == "__main__":
                 event2["country"] = to_country
                 send(event2)
 
+            elif r < 0.05:
+                # Scenario F : 4 transactions juste sous le seuil de 10 000 EUR
+                print(f"[ANOMALIE INJECTEE - structuring] {customer_id} : 4 x ~9 500 EUR")
+                for _ in range(4):
+                    send(make_event(customer_id, round(random.uniform(9000, 9990), 2)))
+                    time.sleep(3)
+
             else:
                 # Transaction normale
                 send(make_event(customer_id, normal_amount(customer_id)))
